@@ -1,5 +1,66 @@
 (uiop:define-package :lftp-wrapper
-    (:use :cl))
+    (:use :cl)
+  (:documentation "Send files to FTP and SFTP servers, using the LFTP program.
+
+Prerequesites:
+
+    apt install lftp
+
+the lftp program handles many protocols, and allows to easily use SFTP on the command line (including giving the password on the command, which otherwise is a bit tedious).
+
+Nice to have:
+
+create a ~/.lftprc file with:
+
+debug
+set sftp:auto-confirm 1
+
+this answers \"yes\" to accept connections.
+
+Usage:
+
+(make-profile :login xxx :server xxx :port xxx :password xxx)
+
+the password is not revealed on stdout by default.
+
+
+We also use a few environment variables to find LFT credentials:
+
+LFTP_LOGIN
+LFTP_PORT
+etc for server and password.
+
+We also use files to read the credentials, if we don't find env vars:
+
+LFTP_LOGIN.txt
+etc
+
+so you can create a profile with only
+
+    (make-profile)
+
+or with
+
+    (make-profile-from-plist plist)
+
+to create it from a plist.
+
+
+To transfer a file with SFTP, use
+
+    (sftp-transfer profile \"filename.txt\")
+
+with optional arguments:
+
+- :cd in order to 'cd' to a directory on the server
+- :dry-run
+
+
+You can debug the sftp command with
+
+    (put-command profile \"filename.txt\")
+
+"))
 
 (in-package :lftp-wrapper)
 
@@ -62,20 +123,20 @@
       (format stream "hostname: ~s, login: ~a, port: ~a, server: ~a, password? ~a" hostname login port server
               (if password t nil)))))
 
-(defun find-ftp-login (&optional profile)
+(defun find-ftp-login ()
   (or (uiop:getenv "LFTP_LOGIN")
       (when (uiop:file-exists-p "LFTP_LOGIN.txt")
         (str:trim (uiop:read-file-string "LFTP_LOGIN.txt")))))
 
-(defun find-ftp-password (&optional profile)
+(defun find-ftp-password ()
   (or (uiop:getenv "LFTP_PASSWORD")
       (when (uiop:file-exists-p "LFTP_PASSWORD.txt")
         (str:trim (uiop:read-file-string "LFTP_PASSWORD.txt")))))
 
-(defun find-ftp-port (&optional profile)
+(defun find-ftp-port ()
   (or (uiop:getenv "LFTP_PORT")))
 
-(defun find-ftp-server (&optional profile)
+(defun find-ftp-server ()
   (or (uiop:getenv "LFTP_SERVER")))
 
 (defun error-or-quit (msg)
