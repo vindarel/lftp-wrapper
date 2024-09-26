@@ -4,6 +4,8 @@ A wrapper around `lftp` to easily PUT files to a SFTP server (*S*FTP).
 For FTP, see also [cl-ftp](https://github.com/pinterface/cl-ftp).
 Send files to FTP and SFTP servers, using the LFTP program.
 
+status: the original copy is running in production©, we are moving things around in this one and things might break.
+
 ## Prerequisites
 
     apt install lftp
