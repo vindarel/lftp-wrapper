@@ -10,6 +10,7 @@
    #:*ftp-login*
    #:*version*
    #:profile
+   #:sftp-profile
    #:hostname
    #:login
    #:port
@@ -18,8 +19,11 @@
    #:print-password
    #:make-profile
    #:make-profile-from-plist
-   #:put-command
-   #:sftp-transfer))
+   #:run
+   #:build-command
+   #:put
+   #:command
+   ))
 
 (in-package :lftp-wrapper)
 
@@ -41,7 +45,10 @@
 (defvar *version* #.(asdf:system-version (asdf:find-system :lftp-wrapper)))
 
 (defclass profile ()
-  ((hostname :initarg :hostname
+  ((protocol :initarg :protocol
+             :initform nil
+             :accessor protocol)
+   (hostname :initarg :hostname
              :initform *ftp-hostname*
              :accessor hostname)
    (login :initarg :login
@@ -58,6 +65,11 @@
              :accessor password
              :documentation "The password is concealed. To see it, call `show-password' on a profile."))
   (:documentation "LFTP profile."))
+
+(defclass sftp-profile (profile)
+  ()
+  (:default-initargs
+   :protocol "sftp"))
 
 (defmethod print-password ((p profile) &key (stream t))
   "Print the password, revealed. "
@@ -78,8 +90,9 @@
 
 (defmethod print-object ((p profile) stream)
   (print-unreadable-object (p stream :type t)
-    (with-slots (hostname login port server password) p
-      (format stream "hostname: ~s, login: ~a, port: ~a, server: ~a, password? ~a" hostname login port server
+    (with-slots (protocol hostname login port server password) p
+      (format stream "protocol: ~s, hostname: ~s, login: ~s, port: ~s, server: ~s, password? ~s"
+              protocol hostname login port server
               (if password t nil)))))
 
 (defun find-ftp-login ()
@@ -111,45 +124,88 @@
   (:method (filename)
     filename))
 
-(defgeneric make-profile-from-plist (plist)
+(defgeneric make-profile-from-plist (plist &key protocol)
   (:documentation "Create a PROFILE instance with slots taken from PLIST. PLIST has the keys :server, :port, :login, :password etc.")
-  (:method (plist)
+  (:method (plist &key (protocol "sftp"))
     (when (and (consp plist)
                (trivial-types:property-list-p plist))
       (make-instance 'profile
+                     :protocol (or (getf plist :protocol) protocol)
                      :login (getf plist :login)
                      :server (getf plist :server)
                      :password (getf plist :password)
                      :port (getf plist :port)))))
 
-(defgeneric put-command (profile filename &key cd)
-  (:documentation "run lftp for the sftp protocol and PUT a file on the server. If CD is given (a string), first CD into the remote directory.")
-  (:method (profile filename &key cd)
-    (format nil "lftp -p ~a sftp://~a:~a@~a  -e  \"~a put ~a ; bye\""
+(defclass command ()
+  ())
+
+(defclass put (command)
+  ((cd :initarg :cd
+       :initform nil
+       :accessor cd
+       :documentation "If set, CD into a directory on the target before PUT-ing or getting files.")
+   (local-filename :initarg :local-filename
+                   :initform ""
+                   :accessor local-filename
+                   :documentation "The filename on the host filesystem to send.")))
+
+(defmethod print-object ((o command) stream)
+  (print-unreadable-object (o stream :type t :identity t)))
+
+(defmethod print-object ((o put) stream)
+  (print-unreadable-object (o stream :type t :identity t)
+    (with-slots (cd local-filename) o
+      (format stream "cd: ~a, filename: ~s" cd local-filename))))
+
+(defgeneric build-command (profile command &key dry-run)
+  (:documentation "run lftp for the sftp protocol.
+
+  If DRY-RUN is non nil, include the password in clear text and really run the command.
+
+  Currently done for PUT commands.")
+
+  (:method (profile command &key dry-run)
+    (declare (ignore dry-run))
+    (error "build-command is not implement for a command of class ~a, but only for PUT. We are certainly not far though..." (type-of command)))
+
+  (:method (profile (command put) &key (dry-run *dry-run*))
+    ;; Example PUT command:
+    ;; lftp -p 400 sftp://user:*****@test.org -e \" put file.txt ; bye\"
+    (format nil "lftp -p ~a ~a://~a:~a@~a  -e  \"~a put ~a ; bye\""
                                   (port profile)
+                                  (protocol profile)
                                   (login profile)
                                   ;; (secret-values:reveal-value password)
-                                  (server profile)
-                                  (if *show-passwords*
+                                  (if (or *show-passwords* (not dry-run))
                                       (print-password profile :stream nil)
                                       "*****")
-                                  (if cd
-                                      (format nil "cd ~a ;" cd)
+                                  (server profile)
+                                  (if (cd command)
+                                      (format nil "cd ~a ;" (cd command))
                                       "")
-                                  filename)))
+                                  (local-filename command))))
 
-(defgeneric sftp-transfer (profile filename &key dry-run)
-  (:documentation "Send FILENAME via STFP, using the login credentials in PROFILE."))
+(defgeneric run (profile command &key dry-run)
+  (:documentation "Run COMMAND, using the login credentials in PROFILE.
 
-(defmethod sftp-transfer ((profile profile) filename &key (dry-run *dry-run*))
-  "If *dry-run* is t, don't actually run the LFTP command.
+  If the output is:
 
-  If *devel* is t, handle any error and re-signal it, so the developper gets the interactive debugger. When *devel* is NIL (the default), the error is logged on stderr."
-  (let* ((local-filename (local-filename filename))
-         (cmd (put-command profile local-filename)))
+   NIL
+   NIL
+   0
 
-    (log:info cmd)
+  then the command went fine.
 
+  Implemented to PUT files with sftp.
+
+  If *dry-run* is t, don't actually run the LFTP command.
+
+  If *devel* is t, handle any error and re-signal it, so the developper gets the interactive debugger. When *devel* is NIL (the default), the error is logged on stderr."))
+
+(defmethod run ((profile profile) command &key (dry-run *dry-run*))
+  (let* ((local-filename (local-filename command))
+         (cmd (build-command profile command :dry-run dry-run)))
+    (log:info "Our lftp command is: ~a" cmd)
     (handler-case
         ;; strangely cmd:$cmd didn't work, used the server address in lowercase?
         (if dry-run
@@ -157,10 +213,11 @@
 
             ;; TODO: if a bad sftp command, it could stay up a long
             ;; time on the terminal. Need timeout.
+            ;; XXX: we could catch stdout and the 0 exit code for success.
             (uiop:run-program cmd :error-output t))
 
       (error (c)
-        (log:error "LFTP error for file ~a" filename)
+        (log:error "LFTP error for file ~a" local-filename)
         (format *error-output* "~a" c)
         (when *devel*
           (error c))
