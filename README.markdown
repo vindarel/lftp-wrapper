@@ -23,6 +23,12 @@ CL-USER> (run profile command)
 success!
 ~~~
 
+## Installation
+
+lftp-wrapper is in [ocicl](https://github.com/ocicl/ocicl).
+
+Otherwise, clone the project where Quicklisp can find it (~/quicklisp/local-projects/, ~/common-lisp/).
+
 
 ## Prerequisites
 
