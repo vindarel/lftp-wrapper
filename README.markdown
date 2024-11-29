@@ -157,6 +157,9 @@ You can see the sftp command with
 (build-command profile put)
 ~~~
 
+## Lisp?!
+
+This library was driven by my needs running Common Lisp in production©. Read more: https://lisp-journey.gitlab.io/blog/running-my-4th-lisp-script-in-production/
 
 ---
 
