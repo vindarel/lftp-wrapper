@@ -4,7 +4,8 @@ A wrapper around `lftp` to easily send files to a SFTP server.
 While you can very well format a command line yourself, we ship
 utilities to create profiles and assemble commands.
 
-For FTP, see also [cl-ftp](https://github.com/pinterface/cl-ftp) which works very well.
+- new in 2026: see also [cl-ssh](https://github.com/jmeissen/cl-ssh).
+- for FTP, see also [cl-ftp](https://github.com/pinterface/cl-ftp) which works very well.
 
 **status**: the original copy is running in production©, we are moving things around in this one and things might break. It is also limited, but extensible.
 
